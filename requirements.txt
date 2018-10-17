@@ -1,0 +1,4 @@
+troposphere
+awacs
+awscli
+requests
