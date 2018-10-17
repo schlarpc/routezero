@@ -1,6 +1,7 @@
 import collections
 import itertools
 import os
+import re
 import runpy
 import sys
 import tempfile
@@ -52,6 +53,15 @@ def punify_label(label):
         return "xn--" + label.encode("punycode").decode("ascii")
 
 
+def is_valid_hostname(hostname):
+    if len(hostname) > 255:
+        return False
+    if hostname[-1] == ".":
+        hostname = hostname[:-1]
+    allowed = re.compile("(?!-)[A-Z\d-]{1,63}(?<!-)$", re.IGNORECASE)
+    return all(allowed.match(x) for x in hostname.split("."))
+
+
 def get_rfc4193_address(network_id, node_id):
     address = "fd" + network_id + "9993" + node_id
     return ":".join(address[i : i + 4] for i in range(0, len(address), 4))
@@ -77,7 +87,8 @@ def create_records(zone_name, network):
             ipv6.append(get_rfc4193_address(network["id"], member["nodeId"]))
         records[node]["A"] = ipv4
         records[node]["AAAA"] = ipv6
-        records[name]["CNAME"] = [node]
+        if is_valid_hostname(name):
+            records[name]["CNAME"] = [node]
     return dict(records)
 
 
