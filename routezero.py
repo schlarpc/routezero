@@ -1,3 +1,4 @@
+import boto3
 import collections
 import itertools
 import os
@@ -6,10 +7,12 @@ import runpy
 import sys
 import tempfile
 import urllib.parse
+import uuid
 
 import requests
 from troposphere import Template
 from troposphere.route53 import RecordSet, RecordSetGroup
+from troposphere.sqs import Queue
 
 NAME_NAMESPACE = "zerotier"
 NODE_NAMESPACE = "zerotier-node"
@@ -104,7 +107,24 @@ def create_template(zone_name, records):
     template.add_resource(
         RecordSetGroup("Records", HostedZoneName=zone_name, RecordSets=record_sets)
     )
+    template.add_resource(
+        Queue("DummyChangeQueue" + str(uuid.uuid4()).replace("-", "").upper())
+    )
     return template
+
+
+def deploy_stack(stack_name, template, client=None):
+    client = client or boto3.client("cloudformation")
+    methods = [
+        (client.create_stack, client.get_waiter("stack_create_complete")),
+        (client.update_stack, client.get_waiter("stack_update_complete")),
+    ]
+    for method, waiter in methods:
+        try:
+            method(StackName=stack_name, TemplateBody=template)
+        except client.exceptions.AlreadyExistsException:
+            continue
+        waiter.wait(StackName=stack_name, WaiterConfig={"Delay": 10, "MaxAttempts": 60})
 
 
 def handler(event, context):
@@ -114,20 +134,7 @@ def handler(event, context):
     records = create_records(network["config"]["name"], network)
     template = create_template(network["config"]["name"], records)
     print(template.to_json(indent=None))
-    with tempfile.TemporaryDirectory() as tempdir:
-        template_path = os.path.join(tempdir, "template.json")
-        with open(template_path, "w") as f:
-            f.write(template.to_json())
-        run_as_module(
-            "awscli",
-            "cloudformation",
-            "deploy",
-            "--no-fail-on-empty-changeset",
-            "--template-file",
-            template_path,
-            "--stack-name",
-            os.environ["ROUTE53_RECORD_STACK_NAME"],
-        )
+    deploy_stack(os.environ["ROUTE53_RECORD_STACK_NAME"], template.to_json())
 
 
 if __name__ == "__main__":
