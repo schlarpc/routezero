@@ -7,7 +7,7 @@ import shutil
 import sys
 import tempfile
 
-from awacs import cloudformation, route53
+from awacs import cloudformation, route53, sqs
 from awacs.aws import Allow, PolicyDocument, Statement
 from awacs.helpers.trust import get_lambda_assumerole_policy
 from troposphere import GetAtt, Parameter, Ref, Sub, Template
@@ -64,6 +64,7 @@ def create_template():
                                 Action=[
                                     cloudformation.Action("*"),
                                     route53.Action("*"),
+                                    sqs.Action("*"),
                                 ],
                                 Resource=["*"],
                             )
