@@ -11,8 +11,8 @@ import uuid
 
 import requests
 from troposphere import Template
+from troposphere.cloudformation import WaitConditionHandle
 from troposphere.route53 import RecordSet, RecordSetGroup
-from troposphere.sqs import Queue
 
 NAME_NAMESPACE = "zerotier"
 NODE_NAMESPACE = "zerotier-node"
@@ -107,8 +107,9 @@ def create_template(zone_name, records):
     template.add_resource(
         RecordSetGroup("Records", HostedZoneName=zone_name, RecordSets=record_sets)
     )
+    # ensure there is always some "change" to deploy to cloudformation
     template.add_resource(
-        Queue("DummyChangeQueue" + str(uuid.uuid4()).replace("-", "").upper())
+        WaitConditionHandle("DummyChange" + str(uuid.uuid4()).replace("-", "").upper())
     )
     return template
 
